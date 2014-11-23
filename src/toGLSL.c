@@ -226,22 +226,6 @@ void AddVersionDependentCode(HLSLCrossCompilerContext* psContext)
         bcatcstr(glsl,"layout(pixel_center_integer) in vec4 gl_FragCoord;\n");
     }
 
-    /* For versions which do not support a vec1 (currently all versions) */
-    bcatcstr(glsl,"struct vec1 {\n");
-    bcatcstr(glsl,"\tfloat x;\n");
-    bcatcstr(glsl,"};\n");
-
-	if(HaveUVec(psContext->psShader->eTargetLanguage))
-	{
-		bcatcstr(glsl,"struct uvec1 {\n");
-		bcatcstr(glsl,"\tuint x;\n");
-		bcatcstr(glsl,"};\n");
-	}
-
-    bcatcstr(glsl,"struct ivec1 {\n");
-    bcatcstr(glsl,"\tint x;\n");
-    bcatcstr(glsl,"};\n");
-
     /*
         OpenGL 4.1 API spec:
         To use any built-in input or output in the gl_PerVertex block in separable
@@ -262,6 +246,22 @@ void AddVersionDependentCode(HLSLCrossCompilerContext* psContext)
     {
         bcatcstr(glsl,"precision highp float;\n");
     }
+
+    /* For versions which do not support a vec1 (currently all versions) */
+    bcatcstr(glsl,"struct vec1 {\n");
+    bcatcstr(glsl,"\tfloat x;\n");
+    bcatcstr(glsl,"};\n");
+
+    if(HaveUVec(psContext->psShader->eTargetLanguage))
+    {
+        bcatcstr(glsl,"struct uvec1 {\n");
+        bcatcstr(glsl,"\tuint x;\n");
+        bcatcstr(glsl,"};\n");
+    }
+
+    bcatcstr(glsl,"struct ivec1 {\n");
+    bcatcstr(glsl,"\tint x;\n");
+    bcatcstr(glsl,"};\n");
 
     /* There is no default precision qualifier for the following sampler types in either the vertex or fragment language: */
     if(psContext->psShader->eTargetLanguage == LANG_ES_300 || psContext->psShader->eTargetLanguage == LANG_ES_310)
