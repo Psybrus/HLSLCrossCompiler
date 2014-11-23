@@ -81,60 +81,11 @@ void AddVersionDependentCode(HLSLCrossCompilerContext* psContext)
 {
     bstring glsl = *psContext->currentGLSLString;
 
-    if(psContext->psShader->ui32MajorVersion <= 3)
+    if(psContext->psShader->ui32MajorVersion > 3 && psContext->psShader->eTargetLanguage != LANG_ES_300 && psContext->psShader->eTargetLanguage != LANG_ES_310 && !(psContext->psShader->eTargetLanguage >= LANG_330))
     {
-		bcatcstr(glsl, "int RepCounter;\n");
-        bcatcstr(glsl, "int LoopCounter;\n");
-        bcatcstr(glsl, "int ZeroBasedCounter;\n");
-		if(psContext->psShader->eShaderType == VERTEX_SHADER)
-		{
-			uint32_t texCoord;
-			bcatcstr(glsl, "ivec4 Address;\n");
-
-			if(InOutSupported(psContext->psShader->eTargetLanguage))
-			{
-				bcatcstr(glsl, "out vec4 OffsetColour;\n");
-				bcatcstr(glsl, "out vec4 BaseColour;\n");
-
-				bcatcstr(glsl, "out vec4 Fog;\n");
-
-				for(texCoord=0; texCoord<8; ++texCoord)
-				{
-					bformata(glsl, "out vec4 TexCoord%d;\n", texCoord);
-				}
-			}
-			else
-			{
-				bcatcstr(glsl, "varying vec4 OffsetColour;\n");
-				bcatcstr(glsl, "varying vec4 BaseColour;\n");
-
-				bcatcstr(glsl, "varying vec4 Fog;\n");
-
-				for(texCoord=0; texCoord<8; ++texCoord)
-				{
-					bformata(glsl, "varying vec4 TexCoord%d;\n", texCoord);
-				}
-			}
-		}
-		else
-		{
-			uint32_t renderTargets, texCoord;
-
-			bcatcstr(glsl, "varying vec4 OffsetColour;\n");
-			bcatcstr(glsl, "varying vec4 BaseColour;\n");
-
-			bcatcstr(glsl, "varying vec4 Fog;\n");
-
-			for(texCoord=0; texCoord<8; ++texCoord)
-			{
-				bformata(glsl, "varying vec4 TexCoord%d;\n", texCoord);
-			}
-
-			for(renderTargets=0; renderTargets<8; ++renderTargets)
-			{
-				bformata(glsl, "#define Output%d gl_FragData[%d]\n", renderTargets, renderTargets);
-			}
-		}
+        //DX10+ bycode format requires the ability to treat registers
+        //as raw bits. ES3.0+ has that built-in, also 330 onwards
+        bcatcstr(glsl,"#extension GL_ARB_shader_bit_encoding : require\n");
     }
 
 	if(!HaveCompute(psContext->psShader->eTargetLanguage))
@@ -213,6 +164,149 @@ void AddVersionDependentCode(HLSLCrossCompilerContext* psContext)
 		}
 	}
 	
+	//The fragment language has no default precision qualifier for floating point types.
+	if (psContext->psShader->eShaderType == PIXEL_SHADER &&
+		psContext->psShader->eTargetLanguage == LANG_ES_100 || psContext->psShader->eTargetLanguage == LANG_ES_300 || psContext->psShader->eTargetLanguage == LANG_ES_310)
+	{
+		bcatcstr(glsl, "precision highp float;\n");
+	}
+
+	/* There is no default precision qualifier for the following sampler types in either the vertex or fragment language: */
+	if (psContext->psShader->eTargetLanguage == LANG_ES_300 || psContext->psShader->eTargetLanguage == LANG_ES_310)
+	{
+		bcatcstr(glsl, "precision lowp sampler3D;\n");
+		bcatcstr(glsl, "precision lowp samplerCubeShadow;\n");
+		bcatcstr(glsl, "precision lowp sampler2DShadow;\n");
+		bcatcstr(glsl, "precision lowp sampler2DArray;\n");
+		bcatcstr(glsl, "precision lowp sampler2DArrayShadow;\n");
+		bcatcstr(glsl, "precision lowp isampler2D;\n");
+		bcatcstr(glsl, "precision lowp isampler3D;\n");
+		bcatcstr(glsl, "precision lowp isamplerCube;\n");
+		bcatcstr(glsl, "precision lowp isampler2DArray;\n");
+		bcatcstr(glsl, "precision lowp usampler2D;\n");
+		bcatcstr(glsl, "precision lowp usampler3D;\n");
+		bcatcstr(glsl, "precision lowp usamplerCube;\n");
+		bcatcstr(glsl, "precision lowp usampler2DArray;\n");
+
+		if (psContext->psShader->eTargetLanguage == LANG_ES_310)
+		{
+			bcatcstr(glsl, "precision lowp isampler2DMS;\n");
+			bcatcstr(glsl, "precision lowp usampler2D;\n");
+			bcatcstr(glsl, "precision lowp usampler3D;\n");
+			bcatcstr(glsl, "precision lowp usamplerCube;\n");
+			bcatcstr(glsl, "precision lowp usampler2DArray;\n");
+			bcatcstr(glsl, "precision lowp usampler2DMS;\n");
+			bcatcstr(glsl, "precision lowp image2D;\n");
+			bcatcstr(glsl, "precision lowp image3D;\n");
+			bcatcstr(glsl, "precision lowp imageCube;\n");
+			bcatcstr(glsl, "precision lowp image2DArray;\n");
+			bcatcstr(glsl, "precision lowp iimage2D;\n");
+			bcatcstr(glsl, "precision lowp iimage3D;\n");
+			bcatcstr(glsl, "precision lowp iimageCube;\n");
+			bcatcstr(glsl, "precision lowp uimage2DArray;\n");
+		}
+		bcatcstr(glsl, "\n");
+	}
+
+	if (SubroutinesSupported(psContext->psShader->eTargetLanguage))
+	{
+		bcatcstr(glsl, "subroutine void SubroutineType();\n");
+	}
+
+	if (psContext->psShader->ui32MajorVersion <= 3)
+	{
+		bcatcstr(glsl, "int RepCounter;\n");
+		bcatcstr(glsl, "int LoopCounter;\n");
+		bcatcstr(glsl, "int ZeroBasedCounter;\n");
+		if (psContext->psShader->eShaderType == VERTEX_SHADER)
+		{
+			uint32_t texCoord;
+			bcatcstr(glsl, "ivec4 Address;\n");
+
+			if (InOutSupported(psContext->psShader->eTargetLanguage))
+			{
+				bcatcstr(glsl, "out vec4 OffsetColour;\n");
+				bcatcstr(glsl, "out vec4 BaseColour;\n");
+
+				bcatcstr(glsl, "out vec4 Fog;\n");
+
+				for (texCoord = 0; texCoord < 8; ++texCoord)
+				{
+					bformata(glsl, "out vec4 TexCoord%d;\n", texCoord);
+				}
+			}
+			else
+			{
+				bcatcstr(glsl, "varying vec4 OffsetColour;\n");
+				bcatcstr(glsl, "varying vec4 BaseColour;\n");
+
+				bcatcstr(glsl, "varying vec4 Fog;\n");
+
+				for (texCoord = 0; texCoord < 8; ++texCoord)
+				{
+					bformata(glsl, "varying vec4 TexCoord%d;\n", texCoord);
+				}
+			}
+		}
+		else
+		{
+			uint32_t renderTargets, texCoord;
+
+			if (InOutSupported(psContext->psShader->eTargetLanguage))
+			{
+				bcatcstr(glsl, "in vec4 OffsetColour;\n");
+				bcatcstr(glsl, "in vec4 BaseColour;\n");
+
+				bcatcstr(glsl, "in vec4 Fog;\n");
+
+				for (texCoord = 0; texCoord < 8; ++texCoord)
+				{
+					bformata(glsl, "in vec4 TexCoord%d;\n", texCoord);
+				}
+			}
+			else
+			{
+				bcatcstr(glsl, "varying vec4 OffsetColour;\n");
+				bcatcstr(glsl, "varying vec4 BaseColour;\n");
+
+				bcatcstr(glsl, "varying vec4 Fog;\n");
+
+				for (texCoord = 0; texCoord < 8; ++texCoord)
+				{
+					bformata(glsl, "varying vec4 TexCoord%d;\n", texCoord);
+				}
+			}
+
+			if (psContext->psShader->eTargetLanguage > LANG_120)
+			{
+				bcatcstr(glsl, "out vec4 outFragData[8];\n");
+				for (renderTargets = 0; renderTargets < 8; ++renderTargets)
+				{
+					bformata(glsl, "#define Output%d outFragData[%d]\n", renderTargets, renderTargets);
+				}
+			}
+			else if (psContext->psShader->eTargetLanguage >= LANG_ES_300 && psContext->psShader->eTargetLanguage < LANG_120)
+			{
+				// ES 3 supports min 4 rendertargets, I guess this is reasonable lower limit for DX9 shaders
+				bcatcstr(glsl, "out vec4 outFragData[4];\n");
+				for (renderTargets = 0; renderTargets < 4; ++renderTargets)
+				{
+					bformata(glsl, "#define Output%d outFragData[%d]\n", renderTargets, renderTargets);
+				}
+			}
+			else if (psContext->psShader->eTargetLanguage == LANG_ES_100)
+			{
+				bcatcstr(glsl, "#define Output0 gl_FragColor;\n");
+			}
+			else
+			{
+				for (renderTargets = 0; renderTargets < 8; ++renderTargets)
+				{
+					bformata(glsl, "#define Output%d gl_FragData[%d]\n", renderTargets, renderTargets);
+				}
+			}
+		}
+	}
 
     if((psContext->flags & HLSLCC_FLAG_ORIGIN_UPPER_LEFT)
         && (psContext->psShader->eTargetLanguage >= LANG_150))
@@ -226,6 +320,22 @@ void AddVersionDependentCode(HLSLCrossCompilerContext* psContext)
         bcatcstr(glsl,"layout(pixel_center_integer) in vec4 gl_FragCoord;\n");
     }
 
+    /* For versions which do not support a vec1 (currently all versions) */
+    bcatcstr(glsl,"struct vec1 {\n");
+    bcatcstr(glsl,"\tfloat x;\n");
+    bcatcstr(glsl,"};\n");
+
+	if(HaveUVec(psContext->psShader->eTargetLanguage))
+	{
+		bcatcstr(glsl,"struct uvec1 {\n");
+		bcatcstr(glsl,"\tuint x;\n");
+		bcatcstr(glsl,"};\n");
+	}
+
+    bcatcstr(glsl,"struct ivec1 {\n");
+    bcatcstr(glsl,"\tint x;\n");
+    bcatcstr(glsl,"};\n");
+
     /*
         OpenGL 4.1 API spec:
         To use any built-in input or output in the gl_PerVertex block in separable
@@ -238,72 +348,6 @@ void AddVersionDependentCode(HLSLCrossCompilerContext* psContext)
         bcatcstr(glsl, "float gl_PointSize;\n");
         bcatcstr(glsl, "float gl_ClipDistance[];");
         bcatcstr(glsl, "};\n");
-    }
-
-    //The fragment language has no default precision qualifier for floating point types.
-    if(psContext->psShader->eShaderType == PIXEL_SHADER &&
-        psContext->psShader->eTargetLanguage == LANG_ES_100 || psContext->psShader->eTargetLanguage == LANG_ES_300 )
-    {
-        bcatcstr(glsl,"precision highp float;\n");
-    }
-
-    /* For versions which do not support a vec1 (currently all versions) */
-    bcatcstr(glsl,"struct vec1 {\n");
-    bcatcstr(glsl,"\tfloat x;\n");
-    bcatcstr(glsl,"};\n");
-
-    if(HaveUVec(psContext->psShader->eTargetLanguage))
-    {
-        bcatcstr(glsl,"struct uvec1 {\n");
-        bcatcstr(glsl,"\tuint x;\n");
-        bcatcstr(glsl,"};\n");
-    }
-
-    bcatcstr(glsl,"struct ivec1 {\n");
-    bcatcstr(glsl,"\tint x;\n");
-    bcatcstr(glsl,"};\n");
-
-    /* There is no default precision qualifier for the following sampler types in either the vertex or fragment language: */
-    if(psContext->psShader->eTargetLanguage == LANG_ES_300 || psContext->psShader->eTargetLanguage == LANG_ES_310)
-    {
-        bcatcstr(glsl,"precision lowp sampler3D;\n");
-        bcatcstr(glsl,"precision lowp samplerCubeShadow;\n");
-        bcatcstr(glsl,"precision lowp sampler2DShadow;\n");
-        bcatcstr(glsl,"precision lowp sampler2DArray;\n");
-        bcatcstr(glsl,"precision lowp sampler2DArrayShadow;\n");
-        bcatcstr(glsl,"precision lowp isampler2D;\n");
-        bcatcstr(glsl,"precision lowp isampler3D;\n");
-        bcatcstr(glsl,"precision lowp isamplerCube;\n");
-        bcatcstr(glsl,"precision lowp isampler2DArray;\n");
-        bcatcstr(glsl,"precision lowp usampler2D;\n");
-        bcatcstr(glsl,"precision lowp usampler3D;\n");
-        bcatcstr(glsl,"precision lowp usamplerCube;\n");
-        bcatcstr(glsl,"precision lowp usampler2DArray;\n");
-
-		if(psContext->psShader->eTargetLanguage == LANG_ES_310)
-		{
-			bcatcstr(glsl,"precision lowp isampler2DMS;\n");
-			bcatcstr(glsl,"precision lowp usampler2D;\n");
-			bcatcstr(glsl,"precision lowp usampler3D;\n");
-			bcatcstr(glsl,"precision lowp usamplerCube;\n");
-			bcatcstr(glsl,"precision lowp usampler2DArray;\n");
-			bcatcstr(glsl,"precision lowp usampler2DMS;\n");
-			bcatcstr(glsl,"precision lowp image2D;\n");
-			bcatcstr(glsl,"precision lowp image3D;\n");
-			bcatcstr(glsl,"precision lowp imageCube;\n");
-			bcatcstr(glsl,"precision lowp image2DArray;\n");
-			bcatcstr(glsl,"precision lowp iimage2D;\n");
-			bcatcstr(glsl,"precision lowp iimage3D;\n");
-			bcatcstr(glsl,"precision lowp iimageCube;\n");
-			bcatcstr(glsl,"precision lowp uimage2DArray;\n");
-			//Only highp is valid for atomic_uint
-			bcatcstr(glsl,"precision highp atomic_uint;\n");
-		}
-    }
-
-    if(SubroutinesSupported(psContext->psShader->eTargetLanguage))
-    {
-        bcatcstr(glsl, "subroutine void SubroutineType();\n");
     }
 }
 
@@ -410,10 +454,16 @@ void TranslateToGLSL(HLSLCrossCompilerContext* psContext, GLLang* planguage,cons
     uint32_t i;
     Shader* psShader = psContext->psShader;
     GLLang language = *planguage;
-    const uint32_t ui32InstCount = psShader->ui32InstCount;
-    const uint32_t ui32DeclCount = psShader->ui32DeclCount;
+	uint32_t ui32InstCount = 0;
+	uint32_t ui32DeclCount = 0;
 
     psContext->indent = 0;
+
+	/*psShader->sPhase[MAIN_PHASE].ui32InstanceCount = 1;
+	psShader->sPhase[MAIN_PHASE].ppsDecl = hlslcc_malloc(sizeof(Declaration*));
+	psShader->sPhase[MAIN_PHASE].ppsInst = hlslcc_malloc(sizeof(Instruction*));
+	psShader->sPhase[MAIN_PHASE].pui32DeclCount = hlslcc_malloc(sizeof(uint32_t));
+	psShader->sPhase[MAIN_PHASE].pui32InstCount = hlslcc_malloc(sizeof(uint32_t));*/
 
     if(language == LANG_DEFAULT)
     {
@@ -421,7 +471,7 @@ void TranslateToGLSL(HLSLCrossCompilerContext* psContext, GLLang* planguage,cons
         *planguage = language;
     }
 
-    glsl = bfromcstralloc (1024, GetVersionString(language));
+		glsl = bfromcstralloc (1024, GetVersionString(language));
 
     psContext->glsl = glsl;
 	psContext->earlyMain = bfromcstralloc (1024, "");
@@ -458,133 +508,91 @@ void TranslateToGLSL(HLSLCrossCompilerContext* psContext, GLLang* planguage,cons
     {
         int haveInstancedForkPhase = 0;			// Do we have an instanced fork phase?
         int isCurrentForkPhasedInstanced = 0;	// Is the current fork phase instanced?
-        uint32_t forkIndex = 0;
+		const char* asPhaseFuncNames[NUM_PHASES];
+		uint32_t ui32PhaseFuncCallOrder[3];
+		uint32_t ui32PhaseCallIndex;
+
+		uint32_t ui32Phase;
+		uint32_t ui32Instance;
+
+		asPhaseFuncNames[MAIN_PHASE] = "";
+		asPhaseFuncNames[HS_GLOBAL_DECL] = "";
+		asPhaseFuncNames[HS_FORK_PHASE] = "fork_phase";
+		asPhaseFuncNames[HS_CTRL_POINT_PHASE] = "control_point_phase";
+		asPhaseFuncNames[HS_JOIN_PHASE] = "join_phase";
 
         ConsolidateHullTempVars(psShader);
 
-        for(i=0; i < psShader->ui32HSDeclCount; ++i)
+		for(i=0; i < psShader->asPhase[HS_GLOBAL_DECL].pui32DeclCount[0]; ++i)
         {
-            TranslateDeclaration(psContext, psShader->psHSDecl+i);
+			TranslateDeclaration(psContext, psShader->asPhase[HS_GLOBAL_DECL].ppsDecl[0]+i);
         }
 
-        //control
-        psContext->currentPhase = HS_CTRL_POINT_PHASE;
+		for(ui32Phase=HS_CTRL_POINT_PHASE; ui32Phase<NUM_PHASES; ui32Phase++)
+		{
+			psContext->currentPhase = ui32Phase;
+			for(ui32Instance = 0; ui32Instance < psShader->asPhase[ui32Phase].ui32InstanceCount; ++ui32Instance)
+			{
+				isCurrentForkPhasedInstanced = 0; //reset for each fork phase for cases we don't have a fork phase instance count opcode.
+				bformata(glsl, "//%s declarations\n", asPhaseFuncNames[ui32Phase]);
+				for(i=0; i < psShader->asPhase[ui32Phase].pui32DeclCount[ui32Instance]; ++i)
+				{
+					TranslateDeclaration(psContext, psShader->asPhase[ui32Phase].ppsDecl[ui32Instance]+i);
+					if(psShader->asPhase[ui32Phase].ppsDecl[ui32Instance][i].eOpcode == OPCODE_DCL_HS_FORK_PHASE_INSTANCE_COUNT)
+					{
+						haveInstancedForkPhase = 1;
+						isCurrentForkPhasedInstanced = 1;
+					}
+				}
 
-        if(psShader->ui32HSControlPointDeclCount)
-        {
-            bcatcstr(glsl, "//Control point phase declarations\n");
-            for(i=0; i < psShader->ui32HSControlPointDeclCount; ++i)
-            {
-                TranslateDeclaration(psContext, psShader->psHSControlPointPhaseDecl+i);
-            }
-        }
+				bformata(glsl, "void %s%d()\n{\n", asPhaseFuncNames[ui32Phase], ui32Instance);
+				psContext->indent++;
 
-        if(psShader->ui32HSControlPointInstrCount)
-        {
-            SetDataTypes(psContext, psShader->psHSControlPointPhaseInstr, psShader->ui32HSControlPointInstrCount);
+				SetDataTypes(psContext, psShader->asPhase[ui32Phase].ppsInst[ui32Instance], psShader->asPhase[ui32Phase].pui32InstCount[ui32Instance]-1);
 
-            bcatcstr(glsl, "void control_point_phase()\n{\n");
-            psContext->indent++;
+					if(isCurrentForkPhasedInstanced)
+					{
+						AddIndentation(psContext);
+						bformata(glsl, "for(int forkInstanceID = 0; forkInstanceID < HullPhase%dInstanceCount; ++forkInstanceID) {\n", ui32Instance);
+						psContext->indent++;
+					}
 
-                for(i=0; i < psShader->ui32HSControlPointInstrCount; ++i)
-                {
-                    TranslateInstruction(psContext, psShader->psHSControlPointPhaseInstr+i);
-                }
-            psContext->indent--;
-            bcatcstr(glsl, "}\n");
-        }
+						//The minus one here is remove the return statement at end of phases.
+						//This is needed otherwise the for loop will only run once.
+						ASSERT(psShader->asPhase[ui32Phase].ppsInst[ui32Instance]  [psShader->asPhase[ui32Phase].pui32InstCount[ui32Instance]-1].eOpcode == OPCODE_RET);
+						for(i=0; i < psShader->asPhase[ui32Phase].pui32InstCount[ui32Instance]-1; ++i)
+						{
+							TranslateInstruction(psContext, psShader->asPhase[ui32Phase].ppsInst[ui32Instance]+i, NULL);
+						}
 
-        //fork
-        psContext->currentPhase = HS_FORK_PHASE;
-        for(forkIndex = 0; forkIndex < psShader->ui32ForkPhaseCount; ++forkIndex)
-        {
-            isCurrentForkPhasedInstanced = 0; //reset for each fork phase for cases we don't have a fork phase instance count opcode.
-            bcatcstr(glsl, "//Fork phase declarations\n");
-            for(i=0; i < psShader->aui32HSForkDeclCount[forkIndex]; ++i)
-            {
-                TranslateDeclaration(psContext, psShader->apsHSForkPhaseDecl[forkIndex]+i);
-                if(psShader->apsHSForkPhaseDecl[forkIndex][i].eOpcode == OPCODE_DCL_HS_FORK_PHASE_INSTANCE_COUNT)
-                {
-                    haveInstancedForkPhase = 1;
-                    isCurrentForkPhasedInstanced = 1;
-                }
-            }
+					if(haveInstancedForkPhase)
+					{
+						psContext->indent--;
+						AddIndentation(psContext);
 
-            bformata(glsl, "void fork_phase%d()\n{\n", forkIndex);
-            psContext->indent++;
+						if(isCurrentForkPhasedInstanced)
+						{
+							bcatcstr(glsl, "}\n");
+						}
 
-            SetDataTypes(psContext, psShader->apsHSForkPhaseInstr[forkIndex], psShader->aui32HSForkInstrCount[forkIndex]-1);
+						if(psContext->havePostShaderCode[psContext->currentPhase])
+						{
+	#ifdef _DEBUG
+							AddIndentation(psContext);
+							bcatcstr(glsl, "//--- Post shader code ---\n");
+	#endif
+							bconcat(glsl, psContext->postShaderCode[psContext->currentPhase]);
+	#ifdef _DEBUG
+							AddIndentation(psContext);
+							bcatcstr(glsl, "//--- End post shader code ---\n");
+	#endif
+						}
+				}
 
-                if(isCurrentForkPhasedInstanced)
-                {
-                    AddIndentation(psContext);
-                    bformata(glsl, "for(int forkInstanceID = 0; forkInstanceID < HullPhase%dInstanceCount; ++forkInstanceID) {\n", forkIndex);
-                    psContext->indent++;
-                }
-
-                    //The minus one here is remove the return statement at end of phases.
-                    //This is needed otherwise the for loop will only run once.
-                    ASSERT(psShader->apsHSForkPhaseInstr[forkIndex][psShader->aui32HSForkInstrCount[forkIndex]-1].eOpcode == OPCODE_RET);
-                    for(i=0; i < psShader->aui32HSForkInstrCount[forkIndex]-1; ++i)
-                    {
-                        TranslateInstruction(psContext, psShader->apsHSForkPhaseInstr[forkIndex]+i);
-                    }
-
-                if(haveInstancedForkPhase)
-                {
-                    psContext->indent--;
-                    AddIndentation(psContext);
-
-                    if(isCurrentForkPhasedInstanced)
-                    {
-                        bcatcstr(glsl, "}\n");
-                    }
-
-                    if(psContext->havePostShaderCode[psContext->currentPhase])
-                    {
-#ifdef _DEBUG
-                        AddIndentation(psContext);
-                        bcatcstr(glsl, "//--- Post shader code ---\n");
-#endif
-                        bconcat(glsl, psContext->postShaderCode[psContext->currentPhase]);
-#ifdef _DEBUG
-                        AddIndentation(psContext);
-                        bcatcstr(glsl, "//--- End post shader code ---\n");
-#endif
-                    }
-            }
-
-            psContext->indent--;
-            bcatcstr(glsl, "}\n");
-        }
-
-
-        //join
-        psContext->currentPhase = HS_JOIN_PHASE;
-        if(psShader->ui32HSJoinDeclCount)
-        {
-            bcatcstr(glsl, "//Join phase declarations\n");
-            for(i=0; i < psShader->ui32HSJoinDeclCount; ++i)
-            {
-                TranslateDeclaration(psContext, psShader->psHSJoinPhaseDecl+i);
-            }
-        }
-
-        if(psShader->ui32HSJoinInstrCount)
-        {
-			SetDataTypes(psContext, psShader->psHSJoinPhaseInstr, psShader->ui32HSJoinInstrCount);
-
-            bcatcstr(glsl, "void join_phase()\n{\n");
-            psContext->indent++;
-
-                for(i=0; i < psShader->ui32HSJoinInstrCount; ++i)
-                {
-                    TranslateInstruction(psContext, psShader->psHSJoinPhaseInstr+i);
-                }
-
-            psContext->indent--;
-            bcatcstr(glsl, "}\n");
-        }
+				psContext->indent--;
+				bcatcstr(glsl, "}\n");
+			}
+		}
 
         bcatcstr(glsl, "void main()\n{\n");
 
@@ -600,33 +608,29 @@ void TranslateToGLSL(HLSLCrossCompilerContext* psContext, GLLang* planguage,cons
             bcatcstr(glsl, "//--- End Early Main ---\n");
 #endif
 
-            if(psShader->ui32HSControlPointInstrCount)
-            {
-                AddIndentation(psContext);
-                bcatcstr(glsl, "control_point_phase();\n");
+			ui32PhaseFuncCallOrder[0] = HS_CTRL_POINT_PHASE;
+			ui32PhaseFuncCallOrder[1] = HS_FORK_PHASE;
+			ui32PhaseFuncCallOrder[2] = HS_JOIN_PHASE;
 
-                if(psShader->ui32ForkPhaseCount || psShader->ui32HSJoinInstrCount)
-                {
-                    AddIndentation(psContext);
-                    bcatcstr(glsl, "barrier();\n");
-                }
-            }
-            for(forkIndex = 0; forkIndex < psShader->ui32ForkPhaseCount; ++forkIndex)
-            {
-                AddIndentation(psContext);
-                bformata(glsl, "fork_phase%d();\n", forkIndex);
+			for(ui32PhaseCallIndex=0; ui32PhaseCallIndex<3; ui32PhaseCallIndex++)
+			{
+				ui32Phase = ui32PhaseFuncCallOrder[ui32PhaseCallIndex];
+				for(ui32Instance = 0; ui32Instance < psShader->asPhase[ui32Phase].ui32InstanceCount; ++ui32Instance)
+				{
+					AddIndentation(psContext);
+					bformata(glsl, "%s%d();\n", asPhaseFuncNames[ui32Phase], ui32Instance);
 
-                if(psShader->ui32HSJoinInstrCount || (forkIndex+1 < psShader->ui32ForkPhaseCount))
-                {
-                    AddIndentation(psContext);
-                    bcatcstr(glsl, "barrier();\n");
-                }
-            }
-            if(psShader->ui32HSJoinInstrCount)
-            {
-                AddIndentation(psContext);
-                bcatcstr(glsl, "join_phase();\n");
-            }
+					if(ui32Phase == HS_FORK_PHASE)
+					{
+						if(psShader->asPhase[HS_JOIN_PHASE].ui32InstanceCount ||
+							(ui32Instance+1 < psShader->asPhase[HS_FORK_PHASE].ui32InstanceCount))
+						{
+							AddIndentation(psContext);
+							bcatcstr(glsl, "barrier();\n");
+						}
+					}
+				}
+			}
 
             psContext->indent--;
 
@@ -683,9 +687,12 @@ void TranslateToGLSL(HLSLCrossCompilerContext* psContext, GLLang* planguage,cons
         }
     }
 
+	ui32InstCount = psShader->asPhase[MAIN_PHASE].pui32InstCount[0];
+	ui32DeclCount = psShader->asPhase[MAIN_PHASE].pui32DeclCount[0];
+
     for(i=0; i < ui32DeclCount; ++i)
     {
-        TranslateDeclaration(psContext, psShader->psDecl+i);
+		TranslateDeclaration(psContext, psShader->asPhase[MAIN_PHASE].ppsDecl[0]+i);
     }
 
 	if(psContext->psShader->ui32NumDx9ImmConst)
@@ -709,11 +716,11 @@ void TranslateToGLSL(HLSLCrossCompilerContext* psContext, GLLang* planguage,cons
 
     MarkIntegerImmediates(psContext);
 
-	SetDataTypes(psContext, psShader->psInst, ui32InstCount);
+	SetDataTypes(psContext, psShader->asPhase[MAIN_PHASE].ppsInst[0], ui32InstCount);
 
     for(i=0; i < ui32InstCount; ++i)
     {
-        TranslateInstruction(psContext, psShader->psInst+i);
+		TranslateInstruction(psContext, psShader->asPhase[MAIN_PHASE].ppsInst[0]+i, i+1 < ui32InstCount ? psShader->asPhase[MAIN_PHASE].ppsInst[0]+i+1 : 0);
     }
 
     psContext->indent--;
@@ -766,6 +773,11 @@ HLSLCC_API int HLSLCC_APIENTRY TranslateHLSLFromMem(const char* shader,
 	if(psShader)
     {
         HLSLCrossCompilerContext sContext;
+
+		if(psShader->ui32MajorVersion <= 3)
+		{
+			flags &= ~HLSLCC_FLAG_COMBINE_TEXTURE_SAMPLERS;
+		}
 
         sContext.psShader = psShader;
         sContext.flags = flags;
@@ -820,26 +832,34 @@ HLSLCC_API int HLSLCC_APIENTRY TranslateHLSLFromMem(const char* shader,
             bdestroy(sContext.postShaderCode[i]);
         }
 
-        hlslcc_free(psShader->psHSControlPointPhaseDecl);
-		FreeSubOperands(psShader->psHSControlPointPhaseInstr, psShader->ui32HSControlPointInstrCount);
-        hlslcc_free(psShader->psHSControlPointPhaseInstr);
-
-        for(i=0; i < psShader->ui32ForkPhaseCount; ++i)
-        {
-            hlslcc_free(psShader->apsHSForkPhaseDecl[i]);
-			FreeSubOperands(psShader->apsHSForkPhaseInstr[i], psShader->aui32HSForkInstrCount[i]);
-            hlslcc_free(psShader->apsHSForkPhaseInstr[i]);
-        }
-        hlslcc_free(psShader->psHSJoinPhaseDecl);
-		FreeSubOperands(psShader->psHSJoinPhaseInstr, psShader->ui32HSJoinInstrCount);
-        hlslcc_free(psShader->psHSJoinPhaseInstr);
-
-        hlslcc_free(psShader->psDecl);
-		FreeSubOperands(psShader->psInst, psShader->ui32InstCount);
-        hlslcc_free(psShader->psInst);
+		for(i=0; i<NUM_PHASES;++i)
+		{
+			if(psShader->asPhase[i].ppsDecl != 0)
+			{
+				uint32_t k;
+				for(k=0; k < psShader->asPhase[i].ui32InstanceCount; ++k)
+				{
+					hlslcc_free(psShader->asPhase[i].ppsDecl[k]);
+				}
+				hlslcc_free(psShader->asPhase[i].ppsDecl);
+			}
+			if(psShader->asPhase[i].ppsInst != 0)
+			{
+				uint32_t k;
+				for(k=0; k < psShader->asPhase[i].ui32InstanceCount; ++k)
+				{
+					FreeSubOperands(psShader->asPhase[i].ppsInst[k], psShader->asPhase[i].pui32InstCount[k]);
+					hlslcc_free(psShader->asPhase[i].ppsInst[k]);
+				}
+				hlslcc_free(psShader->asPhase[i].ppsInst);
+			}
+		}
         
 		memcpy(&result->reflection,&psShader->sInfo,sizeof(psShader->sInfo));
         
+		result->textureSamplerInfo.ui32NumTextureSamplerPairs = psShader->textureSamplerInfo.ui32NumTextureSamplerPairs;
+		for (i=0; i<result->textureSamplerInfo.ui32NumTextureSamplerPairs; i++)
+			strcpy(result->textureSamplerInfo.aTextureSamplerPair[i].Name, psShader->textureSamplerInfo.aTextureSamplerPair[i].Name);
 
         hlslcc_free(psShader);
 

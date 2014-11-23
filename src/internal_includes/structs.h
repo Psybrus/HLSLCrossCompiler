@@ -77,7 +77,8 @@ typedef struct Instruction_TAG
 #endif
 } Instruction;
 
-static enum{ MAX_IMMEDIATE_CONST_BUFFER_VEC4_SIZE = 1024};
+enum{ MAX_IMMEDIATE_CONST_BUFFER_VEC4_SIZE = 1024};
+enum{ MAX_TEXTURE_SAMPLERS_PAIRS = 32};
 
 typedef struct ICBVec4_TAG {
 	uint32_t a;
@@ -147,13 +148,35 @@ typedef struct Declaration_TAG
     uint32_t ui32TableLength;
 
 	uint32_t ui32IsShadowTex;
+
+    uint32_t ui32SamplerUsed[MAX_TEXTURE_SAMPLERS_PAIRS];
+    uint32_t ui32SamplerUsedCount;
 } Declaration;
 
-static enum {MAX_TEMP_VEC4 = 512};
+enum {MAX_TEMP_VEC4 = 512};
 
-static enum {MAX_GROUPSHARED = 8};
+enum {MAX_GROUPSHARED = 8};
 
 static enum {MAX_DX9_IMMCONST = 256};
+
+static const uint32_t MAIN_PHASE = 0;
+static const uint32_t HS_GLOBAL_DECL = 1;
+static const uint32_t HS_CTRL_POINT_PHASE = 2;
+static const uint32_t HS_FORK_PHASE = 3;
+static const uint32_t HS_JOIN_PHASE = 4;
+static enum{ NUM_PHASES = 5};
+
+typedef struct ShaderPhase_TAG
+{
+	//How many instances of this phase type are there?
+	uint32_t ui32InstanceCount;
+
+    uint32_t* pui32DeclCount;
+    Declaration** ppsDecl;
+
+    uint32_t* pui32InstCount;
+    Instruction** ppsInst;
+} ShaderPhase;
 
 typedef struct Shader_TAG
 {
@@ -168,9 +191,6 @@ typedef struct Shader_TAG
 
     //DWORDs in program code, including version and length tokens.
     uint32_t ui32ShaderLength;
-
-    uint32_t ui32DeclCount;
-    Declaration* psDecl;
 
     //Instruction* functions;//non-main subroutines
 
@@ -188,35 +208,9 @@ typedef struct Shader_TAG
 
     uint32_t ui32NextClassFuncName[MAX_CLASS_TYPES];
 
-    uint32_t ui32InstCount;
-    Instruction* psInst;
-
     const uint32_t* pui32FirstToken;//Reference for calculating current position in token stream.
 
-	//Hull shader declarations and instructions.
-	//psDecl, psInst are null for hull shaders.
-	uint32_t ui32HSDeclCount;
-	Declaration* psHSDecl;
-
-	uint32_t ui32HSControlPointDeclCount;
-	Declaration* psHSControlPointPhaseDecl;
-
-	uint32_t ui32HSControlPointInstrCount;
-	Instruction* psHSControlPointPhaseInstr;
-
-    uint32_t ui32ForkPhaseCount;
-
-	uint32_t aui32HSForkDeclCount[MAX_FORK_PHASES];
-	Declaration* apsHSForkPhaseDecl[MAX_FORK_PHASES];
-
-	uint32_t aui32HSForkInstrCount[MAX_FORK_PHASES];
-	Instruction* apsHSForkPhaseInstr[MAX_FORK_PHASES];
-
-	uint32_t ui32HSJoinDeclCount;
-	Declaration* psHSJoinPhaseDecl;
-
-	uint32_t ui32HSJoinInstrCount;
-	Instruction* psHSJoinPhaseInstr;
+	ShaderPhase asPhase[NUM_PHASES];
 
     ShaderInfo sInfo;
 
@@ -245,13 +239,8 @@ typedef struct Shader_TAG
 
 	ShaderVarType sGroupSharedVarType[MAX_GROUPSHARED];
 
+    TextureSamplerInfo textureSamplerInfo;
 } Shader;
-
-static const uint32_t MAIN_PHASE = 0;
-static const uint32_t HS_FORK_PHASE = 1;
-static const uint32_t HS_CTRL_POINT_PHASE = 2;
-static const uint32_t HS_JOIN_PHASE = 3;
-static enum{ NUM_PHASES = 4};
 
 typedef struct HLSLCrossCompilerContext_TAG
 {

@@ -12,7 +12,8 @@ void GetConstantBufferFromBindingPoint(const ResourceGroup eGroup, const uint32_
 int GetInterfaceVarFromOffset(uint32_t ui32Offset, ShaderInfo* psShaderInfo, ShaderVar** ppsShaderVar);
 
 int GetInputSignatureFromRegister(const uint32_t ui32Register, const ShaderInfo* psShaderInfo, InOutSignature** ppsOut);
-int GetOutputSignatureFromRegister(const uint32_t ui32Register,
+int GetOutputSignatureFromRegister(const uint32_t currentPhase,
+								   const uint32_t ui32Register,
 								   const uint32_t ui32Stream,
 								   const uint32_t ui32CompMask,
 								   ShaderInfo* psShaderInfo,
@@ -36,6 +37,7 @@ typedef struct
     uint32_t* pui32Inputs11;
     uint32_t* pui32Outputs11;
 	uint32_t* pui32OutputsWithStreams;
+	uint32_t* pui32PatchConstants;
 } ReflectionChunks;
 
 void LoadShaderInfo(const uint32_t ui32MajorVersion,

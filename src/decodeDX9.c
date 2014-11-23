@@ -678,8 +678,11 @@ Shader* DecodeDX9BC(const uint32_t* pui32Tokens)
     }
 
     psInst = hlslcc_malloc(sizeof(Instruction) * ui32NumInstructions);
-    psShader->psInst = psInst;
-    psShader->ui32InstCount = ui32NumInstructions;
+	psShader->asPhase[MAIN_PHASE].ui32InstanceCount = 1;
+	psShader->asPhase[MAIN_PHASE].ppsInst = hlslcc_malloc(sizeof(Instruction*));
+	psShader->asPhase[MAIN_PHASE].ppsInst[0] = psInst;
+	psShader->asPhase[MAIN_PHASE].pui32InstCount = hlslcc_malloc(sizeof(uint32_t));
+	psShader->asPhase[MAIN_PHASE].pui32InstCount[0] = ui32NumInstructions;
 
     if(psShader->eShaderType == VERTEX_SHADER)
     {
@@ -691,8 +694,10 @@ Shader* DecodeDX9BC(const uint32_t* pui32Tokens)
     ui32NumDeclarations++;
 
     psDecl = hlslcc_malloc(sizeof(Declaration) * ui32NumDeclarations);
-    psShader->psDecl = psDecl;
-    psShader->ui32DeclCount = ui32NumDeclarations;
+	psShader->asPhase[MAIN_PHASE].ppsDecl = hlslcc_malloc(sizeof(Declaration*));
+	psShader->asPhase[MAIN_PHASE].ppsDecl[0] = psDecl;
+	psShader->asPhase[MAIN_PHASE].pui32DeclCount = hlslcc_malloc(sizeof(uint32_t));
+	psShader->asPhase[MAIN_PHASE].pui32DeclCount[0] = ui32NumDeclarations;
 
     pui32CurrentToken = pui32Tokens + 1;
 
@@ -862,11 +867,15 @@ Shader* DecodeDX9BC(const uint32_t* pui32Tokens)
 
                     CreateD3D10Instruction(psShader, &psInst[inst], OPCODE_DP4, 1, 1, pui32CurrentToken);
                     memcpy(&psInst[inst].asOperands[2],&psInst[inst].asOperands[1], sizeof(Operand));
+					psInst[inst].ui32NumOperands++;
                     ++inst;
 
                     CreateD3D10Instruction(psShader, &psInst[inst], OPCODE_RSQ, 0, 0, pui32CurrentToken);
                     memcpy(&psInst[inst].asOperands[0],&psInst[inst-1].asOperands[0], sizeof(Operand));
-                    break;
+					memcpy(&psInst[inst].asOperands[1], &psInst[inst - 1].asOperands[0], sizeof(Operand));
+					psInst[inst].ui32NumOperands++;
+					psInst[inst].ui32NumOperands++;
+					break;
                 }
                 case OPCODE_DX9_SINCOS:
                 {
@@ -1015,7 +1024,14 @@ Shader* DecodeDX9BC(const uint32_t* pui32Tokens)
 					// texldd, dst, src0, src1, src2, src3
 					// srcAddress[.swizzle], srcResource[.swizzle], srcSampler, XGradient, YGradient
 					CreateD3D10Instruction(psShader, &psInst[inst], OPCODE_SAMPLE_D, 1, 4, pui32CurrentToken);
-					psInst[inst].asOperands[2].ui32RegisterNumber = 0;
+
+					// Move the gradients one slot up
+					memcpy(&psInst[inst].asOperands[5], &psInst[inst].asOperands[4], sizeof(Operand));
+					memcpy(&psInst[inst].asOperands[4], &psInst[inst].asOperands[3], sizeof(Operand));
+
+					// Sampler register
+					psInst[inst].asOperands[3].ui32RegisterNumber = 0;
+					psInst[inst].ui32NumOperands = 6;
 					break;
 				}
 				case OPCODE_DX9_LRP:
